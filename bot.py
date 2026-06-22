@@ -38,8 +38,8 @@ REACTION_ROLES = {
 
 # ─── COLORS ──────────────────────────────────────────────────────────────────
 
-CRIMSON  = 0x8B0000
-DARK_RED = 0xCC0000
+CRIMSON  = 0x000000
+DARK_RED = 0x000000
 
 # ─── PER-GUILD CONFIG STORAGE ────────────────────────────────────────────────
 # Config is stored per guild: { "GUILD_ID": { "welcome_channel": ..., ... } }
