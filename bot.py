@@ -10,6 +10,9 @@ Commands (admin only — work in ANY server):
   /setup-verify   #channel  — post verification panel
   /setup-roles    #channel  — post reaction roles panel
 
+Public commands:
+  /invite  — get the link to invite this bot to another server
+
 Note: Global slash commands take up to 1 hour to appear after first launch.
 """
 
@@ -71,20 +74,42 @@ intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 intents.reactions = True
+intents.invites = True
 
 bot  = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
+# invite cache: { guild_id: { invite_code: uses } }
+invite_cache: dict[int, dict[str, int]] = {}
+
+
+async def cache_invites(guild: discord.Guild):
+    try:
+        invites = await guild.fetch_invites()
+        invite_cache[guild.id] = {inv.code: inv.uses for inv in invites}
+    except Exception:
+        invite_cache[guild.id] = {}
+
 # ─── EMBEDS ──────────────────────────────────────────────────────────────────
 
-def welcome_embed(member: discord.Member) -> discord.Embed:
+def welcome_embed(
+    member: discord.Member,
+    inviter: discord.Member | None = None,
+    inviter_count: int = 0,
+) -> discord.Embed:
     guild = member.guild
+    if inviter:
+        invite_line = f"📨 Invited by **{inviter.mention}** — `{inviter_count}` invite{'s' if inviter_count != 1 else ''}"
+    else:
+        invite_line = "📨 Invited by **unknown**"
+
     embed = discord.Embed(
         title=f"⚔️  WELCOME TO {guild.name.upper()}",
         description=(
             f"Soldier **{member.mention}** has entered the ranks.\n\n"
             f"📜 Read the rules before anything else.\n"
-            f"🎭 Grab your roles to unlock channels.\n\n"
+            f"🎭 Grab your roles to unlock channels.\n"
+            f"{invite_line}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━"
         ),
         color=CRIMSON,
@@ -314,8 +339,10 @@ async def on_ready():
     bot.add_view(TicketOpenView())
     bot.add_view(TicketCloseView())
     bot.add_view(VerifyView())
+    # Cache invites for all guilds
+    for guild in bot.guilds:
+        await cache_invites(guild)
     try:
-        # Global sync — works in ALL servers, takes up to 1 hour to appear
         synced = await tree.sync()
         print(f"✅  Synced {len(synced)} global slash commands")
     except Exception as e:
@@ -325,16 +352,50 @@ async def on_ready():
 @bot.event
 async def on_guild_join(guild: discord.Guild):
     print(f"➕  Joined new server: {guild.name} ({guild.id})")
+    await cache_invites(guild)
+
+
+@bot.event
+async def on_invite_create(invite: discord.Invite):
+    if invite.guild:
+        await cache_invites(invite.guild)
+
+
+@bot.event
+async def on_invite_delete(invite: discord.Invite):
+    if invite.guild:
+        await cache_invites(invite.guild)
 
 
 @bot.event
 async def on_member_join(member: discord.Member):
-    cfg = get_guild_config(member.guild.id)
+    guild = member.guild
+    inviter = None
+    inviter_count = 0
+
+    # Compare old cache vs fresh invites to find which one was used
+    old = invite_cache.get(guild.id, {})
+    try:
+        new_invites = await guild.fetch_invites()
+    except Exception:
+        new_invites = []
+
+    for inv in new_invites:
+        old_uses = old.get(inv.code, 0)
+        if inv.uses > old_uses:
+            inviter = inv.inviter
+            inviter_count = inv.uses
+            break
+
+    # Update cache with fresh data
+    invite_cache[guild.id] = {inv.code: inv.uses for inv in new_invites}
+
+    cfg = get_guild_config(guild.id)
     channel_id = cfg.get("welcome_channel")
     if channel_id:
-        channel = member.guild.get_channel(int(channel_id))
+        channel = guild.get_channel(int(channel_id))
         if channel:
-            await channel.send(embed=welcome_embed(member))
+            await channel.send(embed=welcome_embed(member, inviter, inviter_count))
 
 
 @bot.event
@@ -616,6 +677,27 @@ async def setup_verify(interaction: discord.Interaction, channel: discord.TextCh
 @is_admin()
 async def setup_roles(interaction: discord.Interaction, channel: discord.TextChannel):
     await interaction.response.send_modal(RolesSetupModal(channel=channel))
+
+@tree.command(name="invite", description="Get the link to invite this bot to another server")
+async def invite(interaction: discord.Interaction):
+    client_id = bot.user.id
+    url = (
+        f"https://discord.com/oauth2/authorize"
+        f"?client_id={client_id}"
+        f"&permissions=8"
+        f"&scope=bot%20applications.commands"
+    )
+    embed = discord.Embed(
+        title="🔗  Invite This Bot",
+        description=(
+            f"Click the link below to add this bot to any server.\n\n"
+            f"**[➜ Click here to invite]({url})**\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━"
+        ),
+        color=CRIMSON,
+    )
+    embed.set_footer(text="Administrator permission required to run setup commands.")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # ─── ERROR HANDLER ───────────────────────────────────────────────────────────
 
