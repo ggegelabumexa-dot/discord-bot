@@ -415,15 +415,47 @@ async def setup_boosts(interaction: discord.Interaction, channel: discord.TextCh
     )
 
 
+class TicketSetupModal(discord.ui.Modal, title="🎟️  Ticket Panel Setup"):
+    intro = discord.ui.TextInput(
+        label="Intro message (shown above the panel)",
+        placeholder="e.g. Hello! This is where you can buy/sell. Open a ticket below!",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1000,
+    )
+
+    def __init__(self, channel: discord.TextChannel):
+        super().__init__()
+        self.channel = channel
+
+    async def on_submit(self, interaction: discord.Interaction):
+        guild = interaction.guild
+
+        # Post your custom intro message first
+        intro_embed = discord.Embed(
+            description=self.intro.value,
+            color=CRIMSON,
+        )
+        intro_embed.set_footer(text=f"{guild.name}  •  Read before opening a ticket")
+        await self.channel.send(embed=intro_embed)
+
+        # Then post the ticket panel with the button
+        msg = await self.channel.send(embed=ticket_panel_embed(guild), view=TicketOpenView())
+        set_guild_config(guild.id, "ticket_panel_message_id", str(msg.id))
+
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                description=f"🎟️  Ticket panel posted in {self.channel.mention}.",
+                color=CRIMSON,
+            ),
+            ephemeral=True,
+        )
+
+
 @tree.command(name="setup-tickets", description="Post the buy/sell ticket panel in a channel")
 @is_admin()
 async def setup_tickets(interaction: discord.Interaction, channel: discord.TextChannel):
-    msg = await channel.send(embed=ticket_panel_embed(interaction.guild), view=TicketOpenView())
-    set_guild_config(interaction.guild.id, "ticket_panel_message_id", str(msg.id))
-    await interaction.response.send_message(
-        embed=discord.Embed(description=f"🎟️  Ticket panel posted in {channel.mention}.", color=CRIMSON),
-        ephemeral=True,
-    )
+    await interaction.response.send_modal(TicketSetupModal(channel=channel))
 
 
 @tree.command(name="setup-verify", description="Post the verification panel in a channel")
