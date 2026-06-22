@@ -389,30 +389,85 @@ def is_admin():
     return app_commands.check(predicate)
 
 
-@tree.command(name="setup-welcome", description="Post the welcome panel in a channel")
-@is_admin()
-async def setup_welcome(interaction: discord.Interaction, channel: discord.TextChannel):
-    set_guild_config(interaction.guild.id, "welcome_channel", str(channel.id))
-    await interaction.response.send_message(
-        embed=discord.Embed(
-            description=f"⚔️  Welcome panel active. New members will be greeted in {channel.mention}.",
-            color=CRIMSON,
-        ),
-        ephemeral=True,
-    )
+def apply_image(embed: discord.Embed, url: str) -> discord.Embed:
+    url = url.strip()
+    if url:
+        embed.set_image(url=url)
+    return embed
 
 
-@tree.command(name="setup-boosts", description="Set the channel for boost notifications")
-@is_admin()
-async def setup_boosts(interaction: discord.Interaction, channel: discord.TextChannel):
-    set_guild_config(interaction.guild.id, "boost_channel", str(channel.id))
-    await interaction.response.send_message(
-        embed=discord.Embed(
-            description=f"🔥  Boost notifications active in {channel.mention}.",
-            color=CRIMSON,
-        ),
-        ephemeral=True,
+class WelcomeSetupModal(discord.ui.Modal, title="⚔️  Welcome Channel Setup"):
+    intro = discord.ui.TextInput(
+        label="Intro message",
+        placeholder="e.g. Welcome to our server! Check #rules and #roles to get started.",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1000,
     )
+    image_url = discord.ui.TextInput(
+        label="Image URL (optional — leave blank to skip)",
+        placeholder="https://i.imgur.com/yourimage.png",
+        style=discord.TextStyle.short,
+        required=False,
+    )
+
+    def __init__(self, channel: discord.TextChannel):
+        super().__init__()
+        self.channel = channel
+
+    async def on_submit(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        set_guild_config(guild.id, "welcome_channel", str(self.channel.id))
+
+        embed = discord.Embed(description=self.intro.value, color=CRIMSON)
+        embed.set_footer(text=f"{guild.name}  •  Welcome channel")
+        apply_image(embed, self.image_url.value or "")
+        await self.channel.send(embed=embed)
+
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                description=f"⚔️  Welcome panel active. New members greeted in {self.channel.mention}.",
+                color=CRIMSON,
+            ),
+            ephemeral=True,
+        )
+
+
+class BoostSetupModal(discord.ui.Modal, title="🔥  Boost Channel Setup"):
+    intro = discord.ui.TextInput(
+        label="Intro message",
+        placeholder="e.g. Boosters get special perks! Thank you for supporting us.",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1000,
+    )
+    image_url = discord.ui.TextInput(
+        label="Image URL (optional — leave blank to skip)",
+        placeholder="https://i.imgur.com/yourimage.png",
+        style=discord.TextStyle.short,
+        required=False,
+    )
+
+    def __init__(self, channel: discord.TextChannel):
+        super().__init__()
+        self.channel = channel
+
+    async def on_submit(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        set_guild_config(guild.id, "boost_channel", str(self.channel.id))
+
+        embed = discord.Embed(description=self.intro.value, color=DARK_RED)
+        embed.set_footer(text=f"{guild.name}  •  Boost notifications")
+        apply_image(embed, self.image_url.value or "")
+        await self.channel.send(embed=embed)
+
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                description=f"🔥  Boost notifications active in {self.channel.mention}.",
+                color=CRIMSON,
+            ),
+            ephemeral=True,
+        )
 
 
 class TicketSetupModal(discord.ui.Modal, title="🎟️  Ticket Panel Setup"):
@@ -423,6 +478,12 @@ class TicketSetupModal(discord.ui.Modal, title="🎟️  Ticket Panel Setup"):
         required=True,
         max_length=1000,
     )
+    image_url = discord.ui.TextInput(
+        label="Image URL (optional — leave blank to skip)",
+        placeholder="https://i.imgur.com/yourimage.png",
+        style=discord.TextStyle.short,
+        required=False,
+    )
 
     def __init__(self, channel: discord.TextChannel):
         super().__init__()
@@ -431,15 +492,11 @@ class TicketSetupModal(discord.ui.Modal, title="🎟️  Ticket Panel Setup"):
     async def on_submit(self, interaction: discord.Interaction):
         guild = interaction.guild
 
-        # Post your custom intro message first
-        intro_embed = discord.Embed(
-            description=self.intro.value,
-            color=CRIMSON,
-        )
-        intro_embed.set_footer(text=f"{guild.name}  •  Read before opening a ticket")
-        await self.channel.send(embed=intro_embed)
+        embed = discord.Embed(description=self.intro.value, color=CRIMSON)
+        embed.set_footer(text=f"{guild.name}  •  Read before opening a ticket")
+        apply_image(embed, self.image_url.value or "")
+        await self.channel.send(embed=embed)
 
-        # Then post the ticket panel with the button
         msg = await self.channel.send(embed=ticket_panel_embed(guild), view=TicketOpenView())
         set_guild_config(guild.id, "ticket_panel_message_id", str(msg.id))
 
@@ -452,6 +509,97 @@ class TicketSetupModal(discord.ui.Modal, title="🎟️  Ticket Panel Setup"):
         )
 
 
+class VerifySetupModal(discord.ui.Modal, title="🛡️  Verify Channel Setup"):
+    intro = discord.ui.TextInput(
+        label="Intro message",
+        placeholder="e.g. Click below to verify and gain access to the server.",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1000,
+    )
+    image_url = discord.ui.TextInput(
+        label="Image URL (optional — leave blank to skip)",
+        placeholder="https://i.imgur.com/yourimage.png",
+        style=discord.TextStyle.short,
+        required=False,
+    )
+
+    def __init__(self, channel: discord.TextChannel):
+        super().__init__()
+        self.channel = channel
+
+    async def on_submit(self, interaction: discord.Interaction):
+        guild = interaction.guild
+
+        embed = discord.Embed(description=self.intro.value, color=CRIMSON)
+        embed.set_footer(text=f"{guild.name}  •  Verification")
+        apply_image(embed, self.image_url.value or "")
+        await self.channel.send(embed=embed)
+
+        await self.channel.send(embed=verify_embed(guild), view=VerifyView())
+
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                description=f"🛡️  Verify panel posted in {self.channel.mention}.",
+                color=CRIMSON,
+            ),
+            ephemeral=True,
+        )
+
+
+class RolesSetupModal(discord.ui.Modal, title="⚔️  Roles Channel Setup"):
+    intro = discord.ui.TextInput(
+        label="Intro message",
+        placeholder="e.g. React below to grab your roles!",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=1000,
+    )
+    image_url = discord.ui.TextInput(
+        label="Image URL (optional — leave blank to skip)",
+        placeholder="https://i.imgur.com/yourimage.png",
+        style=discord.TextStyle.short,
+        required=False,
+    )
+
+    def __init__(self, channel: discord.TextChannel):
+        super().__init__()
+        self.channel = channel
+
+    async def on_submit(self, interaction: discord.Interaction):
+        guild = interaction.guild
+
+        embed = discord.Embed(description=self.intro.value, color=CRIMSON)
+        embed.set_footer(text=f"{guild.name}  •  Roles")
+        apply_image(embed, self.image_url.value or "")
+        await self.channel.send(embed=embed)
+
+        msg = await self.channel.send(embed=roles_embed(guild))
+        for emoji in REACTION_ROLES:
+            await msg.add_reaction(emoji)
+        set_guild_config(guild.id, "roles_message_id", str(msg.id))
+
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                description=f"⚔️  Reaction roles panel posted in {self.channel.mention}.",
+                color=CRIMSON,
+            ),
+            ephemeral=True,
+        )
+
+
+@tree.command(name="setup-welcome", description="Post the welcome panel in a channel")
+@is_admin()
+async def setup_welcome(interaction: discord.Interaction, channel: discord.TextChannel):
+    await interaction.response.send_modal(WelcomeSetupModal(channel=channel))
+
+
+@tree.command(name="setup-boosts", description="Set the channel for boost notifications")
+@is_admin()
+async def setup_boosts(interaction: discord.Interaction, channel: discord.TextChannel):
+    await interaction.response.send_modal(BoostSetupModal(channel=channel))
+
+
 @tree.command(name="setup-tickets", description="Post the buy/sell ticket panel in a channel")
 @is_admin()
 async def setup_tickets(interaction: discord.Interaction, channel: discord.TextChannel):
@@ -461,24 +609,13 @@ async def setup_tickets(interaction: discord.Interaction, channel: discord.TextC
 @tree.command(name="setup-verify", description="Post the verification panel in a channel")
 @is_admin()
 async def setup_verify(interaction: discord.Interaction, channel: discord.TextChannel):
-    await channel.send(embed=verify_embed(interaction.guild), view=VerifyView())
-    await interaction.response.send_message(
-        embed=discord.Embed(description=f"🛡️  Verify panel posted in {channel.mention}.", color=CRIMSON),
-        ephemeral=True,
-    )
+    await interaction.response.send_modal(VerifySetupModal(channel=channel))
 
 
 @tree.command(name="setup-roles", description="Post the reaction roles panel in a channel")
 @is_admin()
 async def setup_roles(interaction: discord.Interaction, channel: discord.TextChannel):
-    msg = await channel.send(embed=roles_embed(interaction.guild))
-    for emoji in REACTION_ROLES:
-        await msg.add_reaction(emoji)
-    set_guild_config(interaction.guild.id, "roles_message_id", str(msg.id))
-    await interaction.response.send_message(
-        embed=discord.Embed(description=f"⚔️  Reaction roles panel posted in {channel.mention}.", color=CRIMSON),
-        ephemeral=True,
-    )
+    await interaction.response.send_modal(RolesSetupModal(channel=channel))
 
 # ─── ERROR HANDLER ───────────────────────────────────────────────────────────
 
