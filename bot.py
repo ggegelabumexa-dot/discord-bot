@@ -683,6 +683,70 @@ async def setup_verify(interaction: discord.Interaction, channel: discord.TextCh
 async def setup_roles(interaction: discord.Interaction, channel: discord.TextChannel):
     await interaction.response.send_modal(RolesSetupModal(channel=channel))
 
+@tree.command(name="say", description="Make the bot send a message in a channel")
+@app_commands.default_permissions(administrator=True)
+@is_admin()
+async def say(interaction: discord.Interaction, channel: discord.TextChannel, message: str):
+    await channel.send(message)
+    await interaction.response.send_message(
+        embed=discord.Embed(description=f"✅  Message sent in {channel.mention}.", color=CRIMSON),
+        ephemeral=True,
+    )
+
+
+@tree.command(name="say-embed", description="Make the bot send a styled embed message in a channel")
+@app_commands.default_permissions(administrator=True)
+@is_admin()
+async def say_embed(interaction: discord.Interaction, channel: discord.TextChannel):
+    await interaction.response.send_modal(SayEmbedModal(channel=channel))
+
+
+class SayEmbedModal(discord.ui.Modal, title="📢  Bot Message"):
+    title_text = discord.ui.TextInput(
+        label="Title (optional)",
+        placeholder="e.g. ANNOUNCEMENT",
+        style=discord.TextStyle.short,
+        required=False,
+        max_length=256,
+    )
+    body = discord.ui.TextInput(
+        label="Message",
+        placeholder="Type whatever you want the bot to say...",
+        style=discord.TextStyle.paragraph,
+        required=True,
+        max_length=2000,
+    )
+    image_url = discord.ui.TextInput(
+        label="Image URL (optional — leave blank to skip)",
+        placeholder="https://i.imgur.com/yourimage.png",
+        style=discord.TextStyle.short,
+        required=False,
+    )
+
+    def __init__(self, channel: discord.TextChannel):
+        super().__init__()
+        self.channel = channel
+
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            description=self.body.value,
+            color=CRIMSON,
+        )
+        if self.title_text.value.strip():
+            embed.title = self.title_text.value.strip()
+        if self.image_url.value.strip():
+            embed.set_image(url=self.image_url.value.strip())
+        embed.set_footer(
+            text=interaction.guild.name,
+            icon_url=interaction.guild.icon.url if interaction.guild.icon else None,
+        )
+        await self.channel.send(embed=embed)
+        await interaction.response.send_message(
+            embed=discord.Embed(description=f"✅  Message sent in {self.channel.mention}.", color=CRIMSON),
+            ephemeral=True,
+        )
+
+
 @tree.command(name="invite", description="Get the link to invite this bot to another server")
 async def invite(interaction: discord.Interaction):
     client_id = bot.user.id
