@@ -409,7 +409,33 @@ async def on_member_join(member: discord.Member):
     if channel_id:
         channel = guild.get_channel(int(channel_id))
         if channel:
-            await channel.send(embed=welcome_embed(member, inviter, inviter_count))
+            intro = cfg.get("welcome_intro", "")
+            image = cfg.get("welcome_image", "")
+
+            if inviter:
+                invite_line = f"📨 Invited by **{inviter.mention}** — `{inviter_count}` invite{'s' if inviter_count != 1 else ''}"
+            else:
+                invite_line = "📨 Invited by **unknown**"
+
+            description = f"{member.mention} just joined.\n\n"
+            if intro:
+                description += f"{intro}\n\n"
+            description += f"{invite_line}"
+
+            embed = discord.Embed(
+                title=f"Welcome to {guild.name}",
+                description=description,
+                color=0x000000,
+            )
+            embed.set_thumbnail(url=member.display_avatar.url)
+            embed.add_field(name="Members", value=f"`{guild.member_count}`", inline=True)
+            embed.set_footer(
+                text=f"{guild.name}",
+                icon_url=guild.icon.url if guild.icon else None,
+            )
+            if image:
+                apply_image(embed, image)
+            await channel.send(embed=embed)
 
 
 @bot.event
@@ -493,6 +519,8 @@ class WelcomeSetupModal(discord.ui.Modal, title="⚔️  Welcome Channel Setup")
     async def on_submit(self, interaction: discord.Interaction):
         guild = interaction.guild
         set_guild_config(guild.id, "welcome_channel", str(self.channel.id))
+        set_guild_config(guild.id, "welcome_intro", self.intro.value)
+        set_guild_config(guild.id, "welcome_image", self.image_url.value or "")
 
         embed = discord.Embed(description=self.intro.value, color=CRIMSON)
         embed.set_footer(text=f"{guild.name}  •  Welcome channel")
