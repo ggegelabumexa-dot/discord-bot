@@ -1,14 +1,16 @@
 """
-Discord Bot - Dark Masculine Style
+Discord Bot - Dark Masculine Style  (Multi-Server)
 Requirements: pip install discord.py
 Run: python bot.py
 
-Commands (admin only):
+Commands (admin only — work in ANY server):
   /setup-welcome  #channel  — post welcome panel
   /setup-boosts   #channel  — post boost notifications panel
   /setup-tickets  #channel  — post buy/sell ticket panel
   /setup-verify   #channel  — post verification panel
   /setup-roles    #channel  — post reaction roles panel
+
+Note: Global slash commands take up to 1 hour to appear after first launch.
 """
 
 import discord
@@ -17,17 +19,15 @@ from discord import app_commands
 import json
 import os
 import asyncio
-from typing import Optional
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 
-TOKEN = os.environ.get("DISCORD_TOKEN", "")
-GUILD_ID = int(os.environ.get("GUILD_ID", "0"))
-VERIFIED_ROLE_NAME = "Verified"         # Role given on verify
-BOOSTER_PERKS = ["pic perms", "custom role", "priority support"]
-CONFIG_FILE = "config.json"
+TOKEN             = os.environ.get("DISCORD_TOKEN", "")
+VERIFIED_ROLE     = "Verified"
+BOOSTER_PERKS     = ["pic perms", "custom role", "priority support"]
+CONFIG_FILE       = "config.json"
 
-# Roles for reaction-role panel  (emoji: role name)
+# Reaction roles: emoji → role name (used across all servers)
 REACTION_ROLES = {
     "⚔️": "Warrior",
     "🔥": "Blazer",
@@ -38,12 +38,11 @@ REACTION_ROLES = {
 
 # ─── COLORS ──────────────────────────────────────────────────────────────────
 
-CRIMSON     = 0x8B0000
-DARK_RED    = 0xCC0000
-BLACK       = 0x0D0D0D
-DARK_GRAY   = 0x1A1A1A
+CRIMSON  = 0x8B0000
+DARK_RED = 0xCC0000
 
-# ─── CONFIG STORAGE ──────────────────────────────────────────────────────────
+# ─── PER-GUILD CONFIG STORAGE ────────────────────────────────────────────────
+# Config is stored per guild: { "GUILD_ID": { "welcome_channel": ..., ... } }
 
 def load_config() -> dict:
     if os.path.exists(CONFIG_FILE):
@@ -55,6 +54,17 @@ def save_config(data: dict):
     with open(CONFIG_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
+def get_guild_config(guild_id: int) -> dict:
+    return load_config().get(str(guild_id), {})
+
+def set_guild_config(guild_id: int, key: str, value: str):
+    config = load_config()
+    gid = str(guild_id)
+    if gid not in config:
+        config[gid] = {}
+    config[gid][key] = value
+    save_config(config)
+
 # ─── BOT SETUP ───────────────────────────────────────────────────────────────
 
 intents = discord.Intents.default()
@@ -62,7 +72,7 @@ intents.members = True
 intents.message_content = True
 intents.reactions = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot  = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
 # ─── EMBEDS ──────────────────────────────────────────────────────────────────
@@ -82,18 +92,20 @@ def welcome_embed(member: discord.Member) -> discord.Embed:
     embed.set_thumbnail(url=member.display_avatar.url)
     embed.add_field(name="👥 Members", value=f"`{guild.member_count}`", inline=True)
     embed.add_field(name="📌 Get Started", value="➜ `#rules`  •  `#roles`", inline=True)
-    embed.set_footer(text=f"{guild.name}  •  Stay sharp.", icon_url=guild.icon.url if guild.icon else None)
-    embed.set_image(url="https://i.imgur.com/placeholder_dark_banner.png")  # Replace with your banner URL
+    embed.set_footer(
+        text=f"{guild.name}  •  Stay sharp.",
+        icon_url=guild.icon.url if guild.icon else None,
+    )
     return embed
 
 
 def boost_embed(member: discord.Member) -> discord.Embed:
-    perks_text = "\n".join(f"🩸 **{p}**" for p in BOOSTER_PERKS)
+    perks = "\n".join(f"🩸 **{p}**" for p in BOOSTER_PERKS)
     embed = discord.Embed(
         title="🔥  SERVER BOOST",
         description=(
             f"**{member.mention}** just powered up the server.\n\n"
-            f"You now have access to:\n{perks_text}\n\n"
+            f"You now have access to:\n{perks}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━"
         ),
         color=DARK_RED,
@@ -143,8 +155,8 @@ def ticket_open_embed(member: discord.Member, what: str, payment: str, username:
         color=CRIMSON,
     )
     embed.add_field(name="📦  What are you trading", value=f"```{what}```", inline=False)
-    embed.add_field(name="💳  Payment method", value=f"```{payment}```", inline=False)
-    embed.add_field(name="🎮  Username", value=f"```{username}```", inline=False)
+    embed.add_field(name="💳  Payment method",        value=f"```{payment}```", inline=False)
+    embed.add_field(name="🎮  Username",               value=f"```{username}```", inline=False)
     embed.set_footer(text="Do not share passwords or sensitive info.")
     return embed
 
@@ -186,7 +198,7 @@ class TicketModal(discord.ui.Modal, title="🎟️  Open a Ticket"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        guild = interaction.guild
+        guild  = interaction.guild
         member = interaction.user
 
         category = discord.utils.get(guild.categories, name="TICKETS")
@@ -195,8 +207,8 @@ class TicketModal(discord.ui.Modal, title="🎟️  Open a Ticket"):
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            member:             discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            guild.me:           discord.PermissionOverwrite(read_messages=True, send_messages=True),
         }
         for role in guild.roles:
             if role.permissions.manage_guild:
@@ -209,9 +221,11 @@ class TicketModal(discord.ui.Modal, title="🎟️  Open a Ticket"):
             topic=f"Ticket opened by {member} — {self.what.value}",
         )
 
-        embed = ticket_open_embed(member, self.what.value, self.payment.value, self.username.value)
-        view = TicketCloseView()
-        await channel.send(content=member.mention, embed=embed, view=view)
+        await channel.send(
+            content=member.mention,
+            embed=ticket_open_embed(member, self.what.value, self.payment.value, self.username.value),
+            view=TicketCloseView(),
+        )
         await interaction.response.send_message(
             f"✅  Your ticket is open: {channel.mention}", ephemeral=True
         )
@@ -268,13 +282,13 @@ class VerifyView(discord.ui.View):
 
     @discord.ui.button(label="✅  Verify", style=discord.ButtonStyle.danger, custom_id="verify_button")
     async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
-        guild = interaction.guild
+        guild  = interaction.guild
         member = interaction.user
-        role = discord.utils.get(guild.roles, name=VERIFIED_ROLE_NAME)
+        role   = discord.utils.get(guild.roles, name=VERIFIED_ROLE)
 
         if role is None:
             role = await guild.create_role(
-                name=VERIFIED_ROLE_NAME,
+                name=VERIFIED_ROLE,
                 color=discord.Color.from_rgb(139, 0, 0),
                 reason="Auto-created by bot for verification",
             )
@@ -296,22 +310,27 @@ class VerifyView(discord.ui.View):
 @bot.event
 async def on_ready():
     print(f"⚔️  Bot online: {bot.user} ({bot.user.id})")
-    # Re-register persistent views so buttons work after restarts
+    print(f"📡  In {len(bot.guilds)} server(s): {[g.name for g in bot.guilds]}")
     bot.add_view(TicketOpenView())
     bot.add_view(TicketCloseView())
     bot.add_view(VerifyView())
     try:
-        guild = discord.Object(id=GUILD_ID)
-        synced = await tree.sync(guild=guild)
-        print(f"✅  Synced {len(synced)} slash commands to guild {GUILD_ID}")
+        # Global sync — works in ALL servers, takes up to 1 hour to appear
+        synced = await tree.sync()
+        print(f"✅  Synced {len(synced)} global slash commands")
     except Exception as e:
         print(f"❌  Sync error: {e}")
 
 
 @bot.event
+async def on_guild_join(guild: discord.Guild):
+    print(f"➕  Joined new server: {guild.name} ({guild.id})")
+
+
+@bot.event
 async def on_member_join(member: discord.Member):
-    config = load_config()
-    channel_id = config.get("welcome_channel")
+    cfg = get_guild_config(member.guild.id)
+    channel_id = cfg.get("welcome_channel")
     if channel_id:
         channel = member.guild.get_channel(int(channel_id))
         if channel:
@@ -320,10 +339,9 @@ async def on_member_join(member: discord.Member):
 
 @bot.event
 async def on_member_update(before: discord.Member, after: discord.Member):
-    # Detect new boost
     if before.premium_since is None and after.premium_since is not None:
-        config = load_config()
-        channel_id = config.get("boost_channel")
+        cfg = get_guild_config(after.guild.id)
+        channel_id = cfg.get("boost_channel")
         if channel_id:
             channel = after.guild.get_channel(int(channel_id))
             if channel:
@@ -332,40 +350,38 @@ async def on_member_update(before: discord.Member, after: discord.Member):
 
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-    config = load_config()
-    roles_msg_id = config.get("roles_message_id")
+    if payload.member and payload.member.bot:
+        return
+    cfg = get_guild_config(payload.guild_id)
+    roles_msg_id = cfg.get("roles_message_id")
     if not roles_msg_id or payload.message_id != int(roles_msg_id):
         return
-    if payload.member.bot:
-        return
 
-    emoji = str(payload.emoji)
-    role_name = REACTION_ROLES.get(emoji)
+    role_name = REACTION_ROLES.get(str(payload.emoji))
     if role_name:
         guild = bot.get_guild(payload.guild_id)
-        role = discord.utils.get(guild.roles, name=role_name)
+        role  = discord.utils.get(guild.roles, name=role_name)
         if role:
             await payload.member.add_roles(role)
 
 
 @bot.event
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
-    config = load_config()
-    roles_msg_id = config.get("roles_message_id")
+    cfg = get_guild_config(payload.guild_id)
+    roles_msg_id = cfg.get("roles_message_id")
     if not roles_msg_id or payload.message_id != int(roles_msg_id):
         return
 
-    emoji = str(payload.emoji)
-    role_name = REACTION_ROLES.get(emoji)
+    role_name = REACTION_ROLES.get(str(payload.emoji))
     if role_name:
-        guild = bot.get_guild(payload.guild_id)
+        guild  = bot.get_guild(payload.guild_id)
         member = guild.get_member(payload.user_id)
         if member and not member.bot:
             role = discord.utils.get(guild.roles, name=role_name)
             if role:
                 await member.remove_roles(role)
 
-# ─── SLASH COMMANDS ──────────────────────────────────────────────────────────
+# ─── SLASH COMMANDS (GLOBAL — all servers) ───────────────────────────────────
 
 def is_admin():
     async def predicate(interaction: discord.Interaction) -> bool:
@@ -373,92 +389,60 @@ def is_admin():
     return app_commands.check(predicate)
 
 
-@tree.command(
-    name="setup-welcome",
-    description="Post the welcome panel in a channel",
-    guild=discord.Object(id=GUILD_ID),
-)
+@tree.command(name="setup-welcome", description="Post the welcome panel in a channel")
 @is_admin()
 async def setup_welcome(interaction: discord.Interaction, channel: discord.TextChannel):
-    config = load_config()
-    config["welcome_channel"] = str(channel.id)
-    save_config(config)
-    embed = discord.Embed(
-        description=(
-            "⚔️  Welcome panel active.\n"
-            f"New members will be greeted in {channel.mention}."
+    set_guild_config(interaction.guild.id, "welcome_channel", str(channel.id))
+    await interaction.response.send_message(
+        embed=discord.Embed(
+            description=f"⚔️  Welcome panel active. New members will be greeted in {channel.mention}.",
+            color=CRIMSON,
         ),
-        color=CRIMSON,
+        ephemeral=True,
     )
-    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@tree.command(
-    name="setup-boosts",
-    description="Post the boost notifications panel in a channel",
-    guild=discord.Object(id=GUILD_ID),
-)
+@tree.command(name="setup-boosts", description="Set the channel for boost notifications")
 @is_admin()
 async def setup_boosts(interaction: discord.Interaction, channel: discord.TextChannel):
-    config = load_config()
-    config["boost_channel"] = str(channel.id)
-    save_config(config)
-    embed = discord.Embed(
-        description=(
-            "🔥  Boost notifications active.\n"
-            f"Boost events will be posted in {channel.mention}."
+    set_guild_config(interaction.guild.id, "boost_channel", str(channel.id))
+    await interaction.response.send_message(
+        embed=discord.Embed(
+            description=f"🔥  Boost notifications active in {channel.mention}.",
+            color=CRIMSON,
         ),
-        color=CRIMSON,
+        ephemeral=True,
     )
-    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@tree.command(
-    name="setup-tickets",
-    description="Post the buy/sell ticket panel in a channel",
-    guild=discord.Object(id=GUILD_ID),
-)
+@tree.command(name="setup-tickets", description="Post the buy/sell ticket panel in a channel")
 @is_admin()
 async def setup_tickets(interaction: discord.Interaction, channel: discord.TextChannel):
-    view = TicketOpenView()
-    msg = await channel.send(embed=ticket_panel_embed(interaction.guild), view=view)
-    config = load_config()
-    config["ticket_panel_message_id"] = str(msg.id)
-    save_config(config)
+    msg = await channel.send(embed=ticket_panel_embed(interaction.guild), view=TicketOpenView())
+    set_guild_config(interaction.guild.id, "ticket_panel_message_id", str(msg.id))
     await interaction.response.send_message(
         embed=discord.Embed(description=f"🎟️  Ticket panel posted in {channel.mention}.", color=CRIMSON),
         ephemeral=True,
     )
 
 
-@tree.command(
-    name="setup-verify",
-    description="Post the verification panel in a channel",
-    guild=discord.Object(id=GUILD_ID),
-)
+@tree.command(name="setup-verify", description="Post the verification panel in a channel")
 @is_admin()
 async def setup_verify(interaction: discord.Interaction, channel: discord.TextChannel):
-    view = VerifyView()
-    await channel.send(embed=verify_embed(interaction.guild), view=view)
+    await channel.send(embed=verify_embed(interaction.guild), view=VerifyView())
     await interaction.response.send_message(
         embed=discord.Embed(description=f"🛡️  Verify panel posted in {channel.mention}.", color=CRIMSON),
         ephemeral=True,
     )
 
 
-@tree.command(
-    name="setup-roles",
-    description="Post the reaction roles panel in a channel",
-    guild=discord.Object(id=GUILD_ID),
-)
+@tree.command(name="setup-roles", description="Post the reaction roles panel in a channel")
 @is_admin()
 async def setup_roles(interaction: discord.Interaction, channel: discord.TextChannel):
     msg = await channel.send(embed=roles_embed(interaction.guild))
-    for emoji in REACTION_ROLES.keys():
+    for emoji in REACTION_ROLES:
         await msg.add_reaction(emoji)
-    config = load_config()
-    config["roles_message_id"] = str(msg.id)
-    save_config(config)
+    set_guild_config(interaction.guild.id, "roles_message_id", str(msg.id))
     await interaction.response.send_message(
         embed=discord.Embed(description=f"⚔️  Reaction roles panel posted in {channel.mention}.", color=CRIMSON),
         ephemeral=True,
@@ -469,15 +453,12 @@ async def setup_roles(interaction: discord.Interaction, channel: discord.TextCha
 @tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.CheckFailure):
-        await interaction.response.send_message(
-            embed=discord.Embed(description="❌  You don't have permission to use this.", color=CRIMSON),
-            ephemeral=True,
-        )
+        msg = "❌  You need Administrator permission to use this."
     else:
-        await interaction.response.send_message(
-            embed=discord.Embed(description=f"❌  Error: `{error}`", color=CRIMSON),
-            ephemeral=True,
-        )
+        msg = f"❌  Error: `{error}`"
+    await interaction.response.send_message(
+        embed=discord.Embed(description=msg, color=CRIMSON), ephemeral=True
+    )
 
 # ─── RUN ─────────────────────────────────────────────────────────────────────
 
