@@ -649,34 +649,36 @@ class RolesSetupModal(discord.ui.Modal, title="⚔️  Roles Channel Setup"):
         )
 
 
-ADMIN_ONLY = discord.Permissions(administrator=True)
-
-
-@tree.command(name="setup-welcome", description="Post the welcome panel in a channel", default_member_permissions=ADMIN_ONLY)
+@tree.command(name="setup-welcome", description="Post the welcome panel in a channel")
+@app_commands.default_permissions(administrator=True)
 @is_admin()
 async def setup_welcome(interaction: discord.Interaction, channel: discord.TextChannel):
     await interaction.response.send_modal(WelcomeSetupModal(channel=channel))
 
 
-@tree.command(name="setup-boosts", description="Set the channel for boost notifications", default_member_permissions=ADMIN_ONLY)
+@tree.command(name="setup-boosts", description="Set the channel for boost notifications")
+@app_commands.default_permissions(administrator=True)
 @is_admin()
 async def setup_boosts(interaction: discord.Interaction, channel: discord.TextChannel):
     await interaction.response.send_modal(BoostSetupModal(channel=channel))
 
 
-@tree.command(name="setup-tickets", description="Post the buy/sell ticket panel in a channel", default_member_permissions=ADMIN_ONLY)
+@tree.command(name="setup-tickets", description="Post the buy/sell ticket panel in a channel")
+@app_commands.default_permissions(administrator=True)
 @is_admin()
 async def setup_tickets(interaction: discord.Interaction, channel: discord.TextChannel):
     await interaction.response.send_modal(TicketSetupModal(channel=channel))
 
 
-@tree.command(name="setup-verify", description="Post the verification panel in a channel", default_member_permissions=ADMIN_ONLY)
+@tree.command(name="setup-verify", description="Post the verification panel in a channel")
+@app_commands.default_permissions(administrator=True)
 @is_admin()
 async def setup_verify(interaction: discord.Interaction, channel: discord.TextChannel):
     await interaction.response.send_modal(VerifySetupModal(channel=channel))
 
 
-@tree.command(name="setup-roles", description="Post the reaction roles panel in a channel", default_member_permissions=ADMIN_ONLY)
+@tree.command(name="setup-roles", description="Post the reaction roles panel in a channel")
+@app_commands.default_permissions(administrator=True)
 @is_admin()
 async def setup_roles(interaction: discord.Interaction, channel: discord.TextChannel):
     await interaction.response.send_modal(RolesSetupModal(channel=channel))
