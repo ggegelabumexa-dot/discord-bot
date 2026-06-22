@@ -302,10 +302,24 @@ class TicketCloseView(discord.ui.View):
 
 
 class VerifyView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, link1_label=None, link1_url=None, link2_label=None, link2_url=None):
         super().__init__(timeout=None)
+        if link1_label and link1_url:
+            self.add_item(discord.ui.Button(
+                label=link1_label,
+                url=link1_url,
+                style=discord.ButtonStyle.link,
+                row=1,
+            ))
+        if link2_label and link2_url:
+            self.add_item(discord.ui.Button(
+                label=link2_label,
+                url=link2_url,
+                style=discord.ButtonStyle.link,
+                row=1,
+            ))
 
-    @discord.ui.button(label="✅  Verify", style=discord.ButtonStyle.danger, custom_id="verify_button")
+    @discord.ui.button(label="✅  Verify", style=discord.ButtonStyle.danger, custom_id="verify_button", row=0)
     async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
         guild  = interaction.guild
         member = interaction.user
@@ -584,10 +598,32 @@ class VerifySetupModal(discord.ui.Modal, title="🛡️  Verify Channel Setup"):
         style=discord.TextStyle.short,
         required=False,
     )
+    link1 = discord.ui.TextInput(
+        label="Link button 1 — Label | URL  (optional)",
+        placeholder="e.g.  Backup Server | https://discord.gg/yourlink",
+        style=discord.TextStyle.short,
+        required=False,
+    )
+    link2 = discord.ui.TextInput(
+        label="Link button 2 — Label | URL  (optional)",
+        placeholder="e.g.  Our Website | https://yoursite.com",
+        style=discord.TextStyle.short,
+        required=False,
+    )
 
     def __init__(self, channel: discord.TextChannel):
         super().__init__()
         self.channel = channel
+
+    @staticmethod
+    def _parse_link(raw: str):
+        if "|" in raw:
+            parts = raw.split("|", 1)
+            label = parts[0].strip()
+            url   = parts[1].strip()
+            if label and url.startswith("http"):
+                return label, url
+        return None, None
 
     async def on_submit(self, interaction: discord.Interaction):
         guild = interaction.guild
@@ -597,7 +633,16 @@ class VerifySetupModal(discord.ui.Modal, title="🛡️  Verify Channel Setup"):
         apply_image(embed, self.image_url.value or "")
         await self.channel.send(embed=embed)
 
-        await self.channel.send(embed=verify_embed(guild), view=VerifyView())
+        l1_label, l1_url = self._parse_link(self.link1.value or "")
+        l2_label, l2_url = self._parse_link(self.link2.value or "")
+
+        await self.channel.send(
+            embed=verify_embed(guild),
+            view=VerifyView(
+                link1_label=l1_label, link1_url=l1_url,
+                link2_label=l2_label, link2_url=l2_url,
+            ),
+        )
 
         await interaction.response.send_message(
             embed=discord.Embed(
